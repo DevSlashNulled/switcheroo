@@ -34,26 +34,30 @@ struct PickerView: View {
                         Button("Open Settings") { openChoices() }
                     }.frame(maxWidth: .infinity, minHeight: 112)
                 } else {
-                    ScrollViewReader { proxy in
-                        ScrollView(.horizontal) {
-                            HStack(spacing: 12) {
-                                ForEach(Array(model.visibleTargets.enumerated()), id: \.element.id) { index, target in
-                                    ProfileTile(target: target, icon: model.icon(for: target),
-                                                index: index, selected: selection.index == index) {
-                                        model.router.choose(target.id, remember: selection.remember)
+                    GeometryReader { viewport in
+                        ScrollViewReader { proxy in
+                            ScrollView(.horizontal) {
+                                HStack(spacing: 12) {
+                                    ForEach(Array(model.visibleTargets.enumerated()), id: \.element.id) { index, target in
+                                        ProfileTile(target: target, icon: model.icon(for: target),
+                                                    index: index, selected: selection.index == index) {
+                                            model.router.choose(target.id, remember: selection.remember)
+                                        }
+                                        .id(target.id)
+                                        .onHover { hovering in if hovering { selection.index = index } }
                                     }
-                                    .id(target.id)
-                                    .onHover { hovering in if hovering { selection.index = index } }
                                 }
-                            }.padding(4)
-                        }
-                        .scrollIndicators(.hidden)
-                        .onChange(of: selection.index) { _, index in
-                            if model.visibleTargets.indices.contains(index) {
-                                proxy.scrollTo(model.visibleTargets[index].id, anchor: .center)
+                                .padding(4)
+                                .frame(minWidth: viewport.size.width, minHeight: viewport.size.height)
+                            }
+                            .scrollIndicators(.hidden)
+                            .onChange(of: selection.index) { _, index in
+                                if model.visibleTargets.indices.contains(index) {
+                                    proxy.scrollTo(model.visibleTargets[index].id, anchor: .center)
+                                }
                             }
                         }
-                    }
+                    }.frame(height: 126)
                 }
 
                 if let message = model.router.message {
@@ -88,7 +92,7 @@ struct PickerView: View {
             }
         }
         .padding(18)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .disabled(model.router.isLaunching)
         .overlay { RoundedRectangle(cornerRadius: 18).strokeBorder(.primary.opacity(0.12), lineWidth: 1) }
         .clipShape(RoundedRectangle(cornerRadius: 18))

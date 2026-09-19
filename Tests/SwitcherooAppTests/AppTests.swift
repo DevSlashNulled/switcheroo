@@ -107,6 +107,20 @@ struct AppTests {
         defer { window.close() }
         try await capture(window, name: "picker-light", appearance: .aqua, directory: directory)
         try await capture(window, name: "picker-dark", appearance: .darkAqua, directory: directory)
+        let threeProfiles = [
+            choices[0],
+            BrowserTarget(installation: choices[0].installation, profileDirectory: "Profile 1", name: "work@example.com"),
+            BrowserTarget(installation: choices[0].installation, profileDirectory: "Profile 2", name: "Service account")
+        ]
+        for count in 1...3 {
+            model.apply(CatalogSnapshot(targets: Array(threeProfiles.prefix(count))))
+            try await capture(window, name: "picker-centered-\(count)", appearance: .aqua, directory: directory)
+        }
+        model.apply(CatalogSnapshot(targets: threeProfiles, issues: [
+            BrowserAccessIssue(installation: choices[2].installation, reason: .needsPermission)
+        ]))
+        try await capture(window, name: "picker-centered-3-dark", appearance: .darkAqua, directory: directory)
+        model.apply(CatalogSnapshot(targets: choices))
         // Browser activation is not an outside click and must not discard a queued link.
         window.resignKey()
         #expect(model.router.current?.url == url)
