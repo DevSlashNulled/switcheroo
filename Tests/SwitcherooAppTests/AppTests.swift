@@ -172,6 +172,44 @@ struct AppTests {
     }
 
     @Test(.enabled(if: ProcessInfo.processInfo.environment["SWITCHEROO_CAPTURE_DIR"] != nil))
+    func nativePickerEscapeDismissesThroughApplicationEvents() async throws {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.accessory)
+        let domain = "local.switcheroo.tests." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: domain))
+        defer { defaults.removePersistentDomain(forName: domain) }
+        var opened = false
+        let model = AppModel(defaults: defaults) { _, _ in opened = true }
+        model.apply(CatalogSnapshot(targets: targets()))
+        let controller = PickerController(model: model)
+        model.router.stateDidChange = { controller.sync() }
+        let url = URL(string: "https://example.com/cancel")!
+        model.router.enqueue([url])
+        let window = try #require(app.windows.first { $0.title == "Switcheroo" && $0.isVisible })
+        defer { controller.suspend(); window.close() }
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(window.isKeyWindow)
+        let escape = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+            timestamp: 0, windowNumber: window.windowNumber, context: nil, characters: "\u{1b}",
+            charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53))
+        app.sendEvent(escape)
+        #expect(model.router.current == nil)
+        #expect(!window.isVisible)
+        #expect(!opened)
+
+        let nextURL = URL(string: "https://example.com/next")!
+        model.router.enqueue([url, nextURL])
+        app.sendAction(#selector(NSResponder.cancelOperation(_:)), to: nil, from: nil)
+        #expect(model.router.current?.url == nextURL)
+        #expect(model.router.pending.count == 1)
+        #expect(window.isVisible)
+        app.sendAction(#selector(NSResponder.cancelOperation(_:)), to: nil, from: nil)
+        #expect(model.router.current == nil)
+        #expect(!window.isVisible)
+        #expect(!opened)
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["SWITCHEROO_CAPTURE_DIR"] != nil))
     func profileFolderIsPreselectedForApprovalAndCanBeCancelled() async throws {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)

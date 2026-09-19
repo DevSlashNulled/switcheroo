@@ -4,8 +4,10 @@ import SwitcherooCore
 
 private final class PickerPanel: NSPanel {
     var handleKey: ((NSEvent) -> Bool)?
+    var handleCancel: (() -> Void)?
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+    override func cancelOperation(_ sender: Any?) { handleCancel?() }
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown, handleKey?(event) == true { return }
         super.sendEvent(event)
@@ -38,6 +40,7 @@ final class PickerController: NSObject {
         panel.hasShadow = true
         panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         panel.handleKey = { [weak self] event in self?.handleKey(event) ?? false }
+        panel.handleCancel = { [weak self] in self?.model.router.cancel() }
         let background = NSVisualEffectView()
         background.material = .popover
         background.blendingMode = .behindWindow
@@ -125,7 +128,7 @@ final class PickerController: NSObject {
         guard !model.router.isLaunching else { return true }
         let targets = model.visibleTargets
         switch event.keyCode {
-        case 53: model.router.cancel()
+        case 53: panel.cancelOperation(nil)
         case 123: selection.index = max(0, selection.index - 1)
         case 124: selection.index = min(max(0, targets.count - 1), selection.index + 1)
         case 36, 76:
