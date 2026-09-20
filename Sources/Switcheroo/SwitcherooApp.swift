@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import SwitcherooCore
 
 @main
 @MainActor
@@ -15,10 +16,15 @@ enum SwitcherooApp {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
-    private let model = AppModel()
+    private let model: AppModel
     private var picker: PickerController!
     private var statusItem: NSStatusItem!
     private var settingsWindow: NSWindow?
+
+    init(model: AppModel = AppModel()) {
+        self.model = model
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         picker = PickerController(model: model)
@@ -30,19 +36,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         statusItem.button?.toolTip = "Switcheroo"
         buildMenu()
         model.refresh()
-        if !model.preferences.hasCompletedSetup {
+        if !model.preferences.hasCompletedSetup && model.router.pending.isEmpty {
             model.selectedTab = .choices
             showSettings()
         }
+        picker.sync()
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
+        guard urls.contains(where: { PendingLink.host(for: $0) != nil }) else { return }
         model.receive(urls)
+        showPendingLinks()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        showSettings()
-        return true
+        if model.router.pending.isEmpty { showSettings() }
+        else { showPendingLinks() }
+        return false
     }
 
     func applicationDidBecomeActive(_ notification: Notification) { model.refresh() }
@@ -58,6 +68,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) { picker.resume() }
+
+    private func showPendingLinks() {
+        settingsWindow?.orderOut(nil)
+        picker?.resume()
+    }
 
     @objc private func showSettings() {
         guard picker != nil else { return }

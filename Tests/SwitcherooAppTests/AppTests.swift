@@ -192,6 +192,83 @@ struct AppTests {
     }
 
     @Test(.enabled(if: ProcessInfo.processInfo.environment["SWITCHEROO_CAPTURE_DIR"] != nil))
+    func incomingLinksResumePickerFromSettingsAndReopen() async throws {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.accessory)
+        let domain = "local.switcheroo.tests." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: domain))
+        defer { defaults.removePersistentDomain(forName: domain) }
+        let model = AppModel(defaults: defaults) { _, _ in Issue.record("Unexpected launch") }
+        model.finishSetup()
+        let delegate = AppDelegate(model: model)
+        let previousMenu = app.mainMenu
+        let previousWindows = Set(app.windows.map(\.windowNumber))
+        defer {
+            while model.router.current != nil { model.router.cancel() }
+            for window in app.windows where !previousWindows.contains(window.windowNumber) { window.close() }
+            app.mainMenu = previousMenu
+        }
+        delegate.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
+        for _ in 0..<100 where model.isRefreshing { try await Task.sleep(for: .milliseconds(10)) }
+        model.apply(CatalogSnapshot(targets: targets()))
+        let first = URL(string: "https://example.com/first")!
+        let second = URL(string: "https://example.com/second")!
+
+        for minimized in [false, true] {
+            _ = delegate.applicationShouldHandleReopen(app, hasVisibleWindows: false)
+            let settings = try #require(app.windows.first { $0.title == "Switcheroo Settings" && $0.isVisible })
+            if minimized { settings.miniaturize(nil) }
+            delegate.application(app, open: [first, second])
+            #expect(!settings.isVisible)
+            let picker = try #require(app.windows.first { $0.title == "Switcheroo" && $0.isVisible })
+            #expect(model.router.pending.map(\.url) == [first, second])
+
+            _ = delegate.applicationShouldHandleReopen(app, hasVisibleWindows: true)
+            #expect(picker.isVisible)
+            #expect(!settings.isVisible)
+
+            model.showSettings?()
+            #expect(settings.isVisible)
+            #expect(!picker.isVisible)
+            settings.close()
+            #expect(picker.isVisible)
+            #expect(model.router.current?.url == first)
+            model.router.cancel()
+            #expect(model.router.current?.url == second)
+            model.router.cancel()
+            #expect(!picker.isVisible)
+            for _ in 0..<100 where model.isRefreshing { try await Task.sleep(for: .milliseconds(10)) }
+        }
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["SWITCHEROO_CAPTURE_DIR"] != nil))
+    func startupLinkTakesPriorityOverSetup() async throws {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.accessory)
+        let domain = "local.switcheroo.tests." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: domain))
+        defer { defaults.removePersistentDomain(forName: domain) }
+        let model = AppModel(defaults: defaults) { _, _ in Issue.record("Unexpected launch") }
+        let delegate = AppDelegate(model: model)
+        let previousMenu = app.mainMenu
+        let previousWindows = Set(app.windows.map(\.windowNumber))
+        defer {
+            while model.router.current != nil { model.router.cancel() }
+            for window in app.windows where !previousWindows.contains(window.windowNumber) { window.close() }
+            app.mainMenu = previousMenu
+        }
+        let url = URL(string: "https://example.com/startup")!
+        delegate.application(app, open: [url])
+        delegate.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
+        for _ in 0..<100 where model.isRefreshing { try await Task.sleep(for: .milliseconds(10)) }
+        model.apply(CatalogSnapshot(targets: targets()))
+        #expect(model.router.current?.url == url)
+        #expect(app.windows.contains { $0.title == "Switcheroo" && $0.isVisible })
+        #expect(!app.windows.contains { $0.title == "Switcheroo Settings" && $0.isVisible })
+        #expect(!model.preferences.hasCompletedSetup)
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["SWITCHEROO_CAPTURE_DIR"] != nil))
     func nativePickerEscapeDismissesThroughApplicationEvents() async throws {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
