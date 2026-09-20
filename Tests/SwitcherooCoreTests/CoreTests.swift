@@ -84,10 +84,24 @@ func launchPreservesOneURLArgument(_ text: String) throws {
                    CGRect(x: 0, y: 0, width: 400, height: 300)] {
         for pointer in [screen.origin, CGPoint(x: screen.maxX, y: screen.maxY),
                         CGPoint(x: screen.minX, y: screen.maxY), CGPoint(x: screen.maxX, y: screen.minY)] {
-            let frame = PickerPlacement.frame(pointer: pointer, screen: screen, targetCount: 20, hasMessage: true)
+            let frame = PickerPlacement.frame(pointer: pointer, screen: screen, targetCount: 20,
+                                               hasMessage: true, urlHeight: 70)
             #expect(screen.insetBy(dx: 16, dy: 16).contains(frame))
         }
     }
+}
+
+@Test func wrappingResizesPickerBelowItsExistingTopEdge() {
+    let screen = CGRect(x: 0, y: 0, width: 1440, height: 900)
+    let pointer = CGPoint(x: 700, y: 700)
+    let compact = PickerPlacement.frame(pointer: pointer, screen: screen, targetCount: 3, hasMessage: false)
+    let wrapped = PickerPlacement.frame(pointer: pointer, screen: screen, targetCount: 3,
+        hasMessage: false, urlHeight: 70, previousFrame: compact)
+    #expect(wrapped.height > compact.height)
+    #expect(wrapped.width == compact.width)
+    #expect(wrapped.maxY == compact.maxY)
+    #expect(PickerPlacement.frame(pointer: pointer, screen: screen, targetCount: 3,
+        hasMessage: false, previousFrame: wrapped) == compact)
 }
 
 @MainActor

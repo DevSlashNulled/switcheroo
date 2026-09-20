@@ -20,6 +20,7 @@ final class PickerController: NSObject {
     private let selection = PickerSelection()
     private let panel: PickerPanel
     private var linkID: UUID?
+    private var urlHeight: CGFloat = 14
     private var isSuspended = false
     private var isHiding = false
     private var globalMouseMonitor: Any?
@@ -48,7 +49,11 @@ final class PickerController: NSObject {
         background.wantsLayer = true
         background.layer?.cornerRadius = 18
         background.layer?.masksToBounds = true
-        let content = NSHostingView(rootView: PickerView(model: model, selection: selection))
+        let content = NSHostingView(rootView: PickerView(model: model, selection: selection) { [weak self] height in
+            guard let self, self.urlHeight != height else { return }
+            self.urlHeight = height
+            self.sync()
+        })
         content.autoresizingMask = [.width, .height]
         background.addSubview(content)
         panel.contentView = background
@@ -70,7 +75,7 @@ final class PickerController: NSObject {
         guard let screen = NSScreen.screens.first(where: { $0.frame.contains(pointer) }) ?? NSScreen.main else { return }
         let frame = PickerPlacement.frame(pointer: pointer, screen: screen.visibleFrame,
             targetCount: model.visibleTargets.count, hasMessage: model.router.message != nil,
-            previousOrigin: panel.isVisible ? panel.frame.origin : nil)
+            urlHeight: urlHeight, previousFrame: panel.isVisible ? panel.frame : nil)
         panel.setFrame(frame, display: true)
         if !panel.isVisible || !panel.isKeyWindow {
             NSApp.activate()

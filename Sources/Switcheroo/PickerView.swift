@@ -10,6 +10,8 @@ final class PickerSelection {
 struct PickerView: View {
     let model: AppModel
     let selection: PickerSelection
+    let onURLHeightChange: (CGFloat) -> Void
+    @State private var urlHeight: CGFloat = 14
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -19,9 +21,19 @@ struct PickerView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(link.host)
                             .font(.system(size: 13, weight: .semibold)).lineLimit(1).truncationMode(.head)
-                        Text(link.url.path.isEmpty ? "/" : link.url.path)
-                            .font(.system(size: 11)).foregroundStyle(.secondary)
-                            .lineLimit(1).truncationMode(.middle)
+                        ScrollView(.vertical) {
+                            Text(link.url.absoluteString)
+                                .font(.system(size: 11)).foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .onGeometryChange(for: CGFloat.self) { min(70, $0.size.height) } action: { height in
+                                    urlHeight = height
+                                    onURLHeightChange(height)
+                                }
+                        }
+                        .frame(maxHeight: urlHeight)
+                        .id(link.id)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityElement(children: .ignore)

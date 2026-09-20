@@ -127,6 +127,7 @@ struct AppTests {
             ("ticket", "https://hypixelstudios.zendesk.com/agent/tickets/90493"),
             ("deep-path", "https://example.com/projects/customer-support/documentation/équipe/日本語/agent/tickets/90493?filter=unassigned#activity"),
             ("long-host", "https://customer-support.internal-tools.regional-office.example.com/agent/tickets/90493"),
+            ("long-query", "https://example.com/projects/customer-support/tickets/90493?view=all-open-tickets&sort=updated-descending&team=platform-engineering&filter=needs-review&source=weekly-report#latest-reply"),
             ("homepage", "https://example.com")
         ] {
             model.router.enqueue([try #require(URL(string: address))])
@@ -134,6 +135,41 @@ struct AppTests {
             try await capture(window, name: "picker-link-\(name)-dark", appearance: .darkAqua, directory: directory)
             model.router.cancel()
         }
+        let compactHeight = window.frame.height
+        let longURL = try #require(URL(string: "https://example.com/" + String(repeating: "a", count: 2048) + "?query=complete#end"))
+        let nextLongURL = try #require(URL(string: "https://example.org/" + String(repeating: "b", count: 2048) + "?query=next#end"))
+        model.router.enqueue([longURL, nextLongURL, url])
+        try await capture(window, name: "picker-link-scroll", appearance: .aqua, directory: directory)
+        #expect(window.frame.height > compactHeight)
+        #expect(window.frame.height < compactHeight + 80)
+        #expect(try #require(window.screen).visibleFrame.contains(window.frame))
+        var smallFrame = window.frame
+        smallFrame.size.height = 268
+        window.setFrame(smallFrame, display: true)
+        try await capture(window, name: "picker-link-small-screen", appearance: .aqua, directory: directory)
+        #expect(window.frame.height == smallFrame.height)
+        controller.sync()
+        try await capture(window, name: "picker-link-scroll-restored", appearance: .aqua, directory: directory)
+        func urlScrollView() throws -> NSScrollView {
+            func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
+            let content = try #require(window.contentView)
+            return try #require(descendants(content).compactMap { $0 as? NSScrollView }
+                .first { ($0.documentView?.frame.height ?? 0) > $0.contentSize.height + 1 })
+        }
+        let scroll = try urlScrollView()
+        let document = try #require(scroll.documentView)
+        #expect(document.frame.width <= scroll.contentSize.width + 1)
+        scroll.contentView.scroll(to: CGPoint(x: 0, y: document.frame.height - scroll.contentSize.height))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        #expect(scroll.contentView.bounds.minY > 0)
+        try await capture(window, name: "picker-link-scroll-end", appearance: .darkAqua, directory: directory)
+        model.router.cancel()
+        try await capture(window, name: "picker-link-scroll-next", appearance: .darkAqua, directory: directory)
+        #expect(try urlScrollView().contentView.bounds.minY == 0)
+        model.router.cancel()
+        try await capture(window, name: "picker-link-compact-again", appearance: .aqua, directory: directory)
+        #expect(window.frame.height < compactHeight + 30)
+        model.router.cancel()
         model.router.rules = [WebsiteRule(host: "hypixelstudios.zendesk.com", targetID: "missing-profile")]
         model.router.enqueue([URL(string: "https://hypixelstudios.zendesk.com/agent/tickets/90493")!])
         try await capture(window, name: "picker-link-unavailable", appearance: .darkAqua, directory: directory)
