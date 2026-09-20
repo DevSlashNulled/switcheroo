@@ -14,17 +14,23 @@ struct PickerView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let link = model.router.current {
-                HStack(spacing: 8) {
+                HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "arrow.left.arrow.right").foregroundStyle(.secondary)
-                    Text("Open \(link.host)\(link.url.path == "/" ? "" : link.url.path)")
-                        .font(.system(size: 13, weight: .medium)).lineLimit(1).truncationMode(.middle)
-                        .help(link.url.absoluteString)
-                    Spacer(minLength: 4)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(link.host)
+                            .font(.system(size: 13, weight: .semibold)).lineLimit(1).truncationMode(.head)
+                        Text(link.url.path.isEmpty ? "/" : link.url.path)
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                            .lineLimit(1).truncationMode(.middle)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Open \(link.url.absoluteString)")
                     Button { copyLink() } label: {
                         Image(systemName: "doc.on.doc")
                     }.buttonStyle(.plain).help("Copy complete URL (⌘C)")
                         .accessibilityLabel("Copy complete URL")
-                }
+                }.help(link.url.absoluteString)
 
                 if model.visibleTargets.isEmpty {
                     VStack(spacing: 8) {

@@ -120,6 +120,26 @@ struct AppTests {
             BrowserAccessIssue(installation: choices[2].installation, reason: .needsPermission)
         ]))
         try await capture(window, name: "picker-centered-3-dark", appearance: .darkAqua, directory: directory)
+
+        model.router.cancel()
+        model.apply(CatalogSnapshot(targets: threeProfiles))
+        for (name, address) in [
+            ("ticket", "https://hypixelstudios.zendesk.com/agent/tickets/90493"),
+            ("deep-path", "https://example.com/projects/customer-support/documentation/équipe/日本語/agent/tickets/90493?filter=unassigned#activity"),
+            ("long-host", "https://customer-support.internal-tools.regional-office.example.com/agent/tickets/90493"),
+            ("homepage", "https://example.com")
+        ] {
+            model.router.enqueue([try #require(URL(string: address))])
+            try await capture(window, name: "picker-link-\(name)", appearance: .aqua, directory: directory)
+            try await capture(window, name: "picker-link-\(name)-dark", appearance: .darkAqua, directory: directory)
+            model.router.cancel()
+        }
+        model.router.rules = [WebsiteRule(host: "hypixelstudios.zendesk.com", targetID: "missing-profile")]
+        model.router.enqueue([URL(string: "https://hypixelstudios.zendesk.com/agent/tickets/90493")!])
+        try await capture(window, name: "picker-link-unavailable", appearance: .darkAqua, directory: directory)
+        model.router.cancel()
+        model.router.rules = []
+        model.router.enqueue([url])
         model.apply(CatalogSnapshot(targets: choices))
         // Browser activation is not an outside click and must not discard a queued link.
         window.resignKey()
