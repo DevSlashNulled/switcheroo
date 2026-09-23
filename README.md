@@ -63,36 +63,3 @@ The app stays in the menu bar and has no periodic polling. Browser metadata is r
 Chromium profile launches use `/usr/bin/open -n -a <app> --args --user-data-dir=<root> --profile-directory=<directory> -- <url>`. Arguments are passed separately without a shell. Safari and Firefox use `NSWorkspace` with an explicit destination application. A successful handoff means macOS accepted the launch request; it does not prove the website finished loading.
 
 To stop using Switcheroo, choose your previous default browser in **System Settings → Desktop & Dock**, disable launch at login if enabled, and quit Switcheroo.
-
-## Verification
-
-```sh
-swift test
-SWITCHEROO_CAPTURE_DIR="$PWD/.build/captures" swift test
-python3 scripts/smoke-routing.py
-python3 scripts/smoke-routing.py --browser '/Applications/Google Chrome.app'
-python3 scripts/smoke-safari.py
-python3 scripts/check-runtime.py
-```
-
-The first command runs the automated logic and settings tests. The capture command additionally opens native test windows, checks keyboard selection, renders light/dark/overflow/setup/settings screenshots, writes picker timing samples, and verifies that the permission dialog preselects the correct disposable folder and handles cancellation. Run desktop checks sequentially so windows do not steal focus from each other.
-
-The Chromium smoke script creates two disposable profiles and verifies isolation using profile-local storage on a localhost page. It checks cold launch and routing back and forth while a different profile is active, then terminates only its own browser processes and removes the test data. It does not read or modify your existing browser profiles.
-
-The Safari smoke script uses the production `BrowserLauncher` to open one localhost test tab in Safari and checks its request. That test tab can be closed afterward.
-
-After building, the runtime check launches its own release-app instance, samples idle CPU and resident memory, verifies that default-browser handlers stayed unchanged, then closes only its own process. Quit any existing Switcheroo instance first. Results are written to `.build/captures/release-runtime.json`.
-
-Edge and Firefox require their own installed-browser smoke checks; fixture and launch-contract coverage does not substitute for those checks. Default-browser consent, login-item approval, and protected-folder access need normal macOS user interaction.
-
-### Local verification: September 19, 2026
-
-- Built and signature-verified on Apple Silicon, macOS 27. The executable's minimum deployment version is macOS 14; older macOS releases were not tested locally.
-- Full suite: 19 active tests passed, including native UI captures, keyboard/focus behavior, and profile-folder preselection/cancellation. The opt-in Safari test passed separately during initial routing verification.
-- Brave and Chrome: cold launch, then alternating between two isolated profiles, passed.
-- Safari: the production launcher opened a localhost page, and the server confirmed Safari's request.
-- Native light/dark picker, long-name overflow, first-run setup, connection prompts, and all three Settings sections were checked with native test windows and captures. Screen-edge placement also has automated geometry coverage.
-- Warm picker rendering in the debug UI harness: approximately 2–10 ms. This excludes cold startup and macOS URL-event delivery.
-- Installed release bundle: 1,553,649 bytes. Five one-second idle samples after installation measured 0.0% CPU and 77.42 MiB RSS, including shared framework pages. This is a short local sample, not a sustained benchmark.
-- The install script installed into `/Applications`, then updated and restarted that running copy. Verified the process location, signature, matching release executable, unchanged settings checksum, and unchanged HTTP/HTTPS handlers. A disposable fixture confirmed it refuses to overwrite an unrelated app.
-- Edge, Firefox, launch-at-login approval, default-browser consent, and granting access to real browser folders were not exercised live.
