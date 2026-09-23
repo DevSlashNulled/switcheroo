@@ -1,65 +1,90 @@
 # Switcheroo
 
-A small native Mac menu bar app for opening links in the right browser or profile.
+A small macOS menu bar app that asks which browser or profile to use when you click a link.
 
-Click a web link in Mail, Slack, or another app, then pick a browser or profile from a horizontal strip near your pointer. Remember a choice for an exact website hostname when you want automatic routing.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/picker-dark.png">
+  <img src="docs/picker-light.png" alt="Switcheroo picker offering Brave Personal, Brave Work, Chrome Work, and Safari" width="436">
+</picture>
 
-## Install or update
+If you switch between a work profile and a personal one, links from Slack or Mail usually land in whichever profile you used last. Switcheroo becomes your default browser, shows a small picker next to your cursor, and passes the link to the one you choose. For sites that always go to the same place, tick "Always use this choice" and it stops asking.
 
-Requires macOS 14 or later and Xcode's Swift 6 toolchain. There are no third-party package dependencies.
+## Features
+
+- Picks up your Brave, Chrome, and Edge profiles automatically. Safari and Firefox show up as regular browsers.
+- Works from the keyboard: number keys, arrows, Return, and Escape.
+- Per-site rules, so `github.com` can always open in your work profile.
+- Stays in the menu bar and can launch at login. No accounts, no network calls, no history.
+
+## Install
+
+You'll need macOS 14 or later and Swift 6, which comes with Xcode 16 or later.
 
 ```sh
+git clone https://github.com/DevSlashNulled/switcheroo.git
+cd switcheroo
 ./scripts/install.sh
 ```
 
-This one command builds, signs, installs, and opens Switcheroo. **Run the same command after changing or updating the source** to install the latest version. Your profiles, ordering, website rules, and other settings are preserved.
+This builds the app, copies it into `/Applications` (or `~/Applications` if that isn't writable), and opens it. To pick the folder yourself, pass it as an argument: `./scripts/install.sh ~/Applications`.
 
-The installer updates an existing copy in `/Applications` or `~/Applications`. For a new install it uses `/Applications` when writable, otherwise your personal `~/Applications` folder. To choose explicitly, run `./scripts/install.sh "$HOME/Applications"`.
+To update, pull and run the same command again. Your settings carry over. If Switcheroo still has unopened links, it asks before quitting, and the installer won't replace a copy that's still running.
 
-Updates stage and verify the new app before gracefully quitting the running copy and replacing it. If Switcheroo has pending links, finish them or approve its Quit dialog. If it stays open, the installer stops without replacing it. It never forces the app to quit, and restores the previous bundle if replacement fails. The installer does not change your default browser or login-item setting.
+There's no prebuilt download because the app isn't notarized. You build it on your own Mac.
 
-For a build without installing, use `./scripts/build.sh`. It produces `dist/Switcheroo.app` with an ad-hoc signature.
+## Getting started
 
-This is a local build, not a notarized distribution for other Macs. No account, API key, background server, or network service is needed.
+The first time Switcheroo opens, it shows a setup window:
 
-## Setup
+1. Your browser profiles are listed and already checked. Uncheck any you don't want in the picker, and use the arrows to reorder them.
+2. If a browser shows a **Connect** button, click it and then **Allow**. macOS needs your permission before Switcheroo can read profile names, and the right folder is already selected. If it shows **Open** instead, that browser hasn't been set up yet. Open it, finish its setup, and come back.
+3. Click **Make Switcheroo my link picker** and accept the macOS prompt.
 
-1. Open Switcheroo. Your browser profiles appear automatically, already selected. Uncheck any you don’t use; the arrows change their order.
-2. If macOS needs permission, click **Connect Brave** (or Chrome/Edge), then **Allow**. The correct folder is already open; there is no path to find or type. If a browser has no profiles yet, click **Open Brave**, finish that browser’s setup, and return to Switcheroo.
-3. Click **Make Switcheroo my link picker** and approve the macOS prompt. Setup closes when both HTTP and HTTPS handlers are confirmed. Click a link from another app to try it.
+Click a link in another app to try it out. You can skip step 3 with **Set up later** and turn it on from **Settings → General** whenever you like.
 
-Everything is on one setup screen. **Set up later** skips the default-browser change; you can enable it later in **Settings → General**. Manage your profiles anytime in **Settings → Choices**. Switcheroo only reads profile names and locations, and never edits browser data. If macOS continues to block profile access, review **System Settings → Privacy & Security → Files & Folders → Switcheroo**.
+## Using the picker
 
-Brave, Chrome, and Edge appear as individual profiles. Safari and Firefox appear as ordinary browser choices, with profile behavior managed by those browsers. Uninstalled browsers are omitted. Profiles refresh when you return to Switcheroo, receive a link, or choose **Refresh choices**.
+| Key | Action |
+| --- | --- |
+| `1` to `9` | Open in that choice |
+| `←` `→`, then `Return` | Move between choices and open |
+| `Space` | Toggle "Always use this choice for…" |
+| `⌘C` | Copy the link |
+| `⌘,` | Open Settings |
+| `Esc` | Cancel |
 
-Profile discovery uses each browser's standard data location under `~/Library/Application Support`. Custom `--user-data-dir` installations, guest/incognito modes, and browser extensions are not included in this release.
-
-Links clicked inside a browser are normally handled by that browser and do not reach Switcheroo. Apps that explicitly launch a particular browser also bypass the system default.
-
-## Picker controls
-
-- Click a tile, or press `1`–`9` for the corresponding visible choice.
-- Use Left/Right and Return to choose with the keyboard. The strip scrolls when needed.
-- Press Space to toggle **Always use this choice for…**.
-- Press `⌘C` to copy the full URL or `⌘,` for Settings.
-- Escape or clicking outside cancels the current link. Other queued links remain in order.
-
-Opening Settings from the picker preserves the pending link until Settings closes. A launch failure keeps the link available for another choice and does not save the requested rule.
+Clicking outside the picker also cancels. When several links arrive at once, they wait in line and the picker shows them one at a time.
 
 ## Website rules
 
-Rules match one exact hostname, regardless of HTTP/HTTPS, port, or path. Hostnames are case-insensitive and a trailing dot is removed. `github.com` does not match `sub.github.com` or `github.com.example.org`. The original URL is passed through without removing query parameters or fragments.
+A rule sends every link for one hostname straight to a browser or profile. Matching is exact. A rule for `github.com` covers every page on `github.com` but not `gist.github.com`. You can add rules from the picker or under **Settings → Website Rules**.
 
-Manage rules in **Website Rules**. A new rule for an existing hostname replaces it. Missing browsers or profiles return the link to the picker. Hiding a choice removes its tile but does not disable existing rules that target it.
+If a rule points at a profile that no longer exists, you get the picker instead. To ignore all rules for a while, choose **Pause website rules** from the menu bar icon. They come back when you unpause or restart the app.
 
-**Pause website rules** in the menu bar makes all links show the picker until you unpause or restart Switcheroo.
+## Good to know
 
-## Storage and behavior
+- Links clicked inside a browser stay in that browser. Switcheroo only sees links opened from other apps.
+- Some apps always open a specific browser and skip the system default.
+- Profiles are read from each browser's standard folder in `~/Library/Application Support`. Custom `--user-data-dir` setups aren't picked up.
+- Switcheroo reads profile names only and never changes browser data.
+- Settings are stored in `UserDefaults` under `local.switcheroo.app`. Pending links are only kept in memory.
 
-Settings, ordering, hidden choices, rules, and read-only folder bookmarks are stored locally in UserDefaults under `local.switcheroo.app`, using the `settings.v1` key. Pending URLs stay in memory and are discarded when the app exits. Quitting with unopened links requires confirmation. There is no browsing-history database or URL logging.
+## Uninstall
 
-The app stays in the menu bar and has no periodic polling. Browser metadata is refreshed at startup, on activation, when a link arrives, and on an explicit refresh. Browser icons are cached for the session.
+1. Choose another default browser in **System Settings → Desktop & Dock**.
+2. If you turned on **Launch at login**, turn it off in **Settings → General**.
+3. Quit Switcheroo from its menu bar icon and delete it from Applications.
+4. To clear its settings too, run `defaults delete local.switcheroo.app`.
 
-Chromium profile launches use `/usr/bin/open -n -a <app> --args --user-data-dir=<root> --profile-directory=<directory> -- <url>`. Arguments are passed separately without a shell. Safari and Firefox use `NSWorkspace` with an explicit destination application. A successful handoff means macOS accepted the launch request; it does not prove the website finished loading.
+## Development
 
-To stop using Switcheroo, choose your previous default browser in **System Settings → Desktop & Dock**, disable launch at login if enabled, and quit Switcheroo.
+```sh
+swift test            # logic and settings tests
+./scripts/build.sh    # builds dist/Switcheroo.app without installing
+```
+
+Run `swift test` with `SWITCHEROO_CAPTURE_DIR` set to also run the UI tests. They open real windows and save screenshots to that folder. The `scripts/smoke-*.py` scripts check real browser launches using throwaway profiles, and `scripts/check-runtime.py` measures idle CPU and memory for a release build.
+
+## License
+
+[MIT](LICENSE)
