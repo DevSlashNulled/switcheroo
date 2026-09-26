@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Check cold and warm Chromium profile routing with isolated, disposable profiles."""
+"""Check real picker/rule routing and browser focus with disposable profiles."""
 import argparse
 import http.server
+import json
 import os
 import pathlib
-import queue
+import plistlib
 import shutil
 import subprocess
 import tempfile
@@ -15,8 +16,11 @@ import urllib.parse
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--browser", default="/Applications/Brave Browser.app")
 args = parser.parse_args()
-reports = queue.Queue()
 root = pathlib.Path(tempfile.mkdtemp(prefix="switcheroo-routing-"))
+browser = root / pathlib.Path(args.browser).name
+data = root / "data"
+reports = root / "reports"
+reports.mkdir()
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -27,7 +31,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         query = urllib.parse.parse_qs(parsed.query)
         if parsed.path == "/report":
-            reports.put((query.get("token", [""])[0], query.get("profile", [""])[0]))
+            token = query.get("token", [""])[0]
+            if token in {"0", "1", "2", "3"} and query.get("focused") == ["true"]:
+                report = {"token": token, "profile": query.get("profile", [""])[0], "focused": True}
+                temporary = reports / f"{token}.tmp"
+                temporary.write_text(json.dumps(report))
+                temporary.replace(reports / f"{token}.json")
             body = b"ok"
             content_type = "text/plain"
         elif parsed.path == "/check":
@@ -37,8 +46,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
 const query = new URLSearchParams(location.search);
 if (query.has('seed')) localStorage.setItem('profile', query.get('seed'));
 document.title = 'Switcheroo: ' + localStorage.getItem('profile');
-fetch('/report?' + new URLSearchParams({token: query.get('token'),
-  profile: localStorage.getItem('profile') || 'missing'}));
+const report = () => {
+  if (!document.hasFocus()) return;
+  clearInterval(timer);
+  fetch('/report?' + new URLSearchParams({token: query.get('token'),
+    profile: localStorage.getItem('profile') || 'missing', focused: 'true'}));
+};
+const timer = setInterval(report, 100);
+report();
 </script>"""
             content_type = "text/html"
         else:
@@ -54,35 +69,61 @@ fetch('/report?' + new URLSearchParams({token: query.get('token'),
 server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
 threading.Thread(target=server.serve_forever, daemon=True).start()
 try:
-    cases = [
-        ("Default", "personal", "personal"),
-        ("Profile 1", "work", "work"),
-        ("Default", None, "personal"),
-        ("Profile 1", None, "work"),
-    ]
-    for index, (directory, seed, expected) in enumerate(cases):
-        query = {"token": str(index)}
-        if seed:
-            query["seed"] = seed
-        url = f"http://127.0.0.1:{server.server_port}/check?{urllib.parse.urlencode(query)}"
-        launch = subprocess.run([
-            "/usr/bin/open", "-n", "-a", args.browser, "--args",
-            f"--user-data-dir={root}", f"--profile-directory={directory}",
-            "--no-first-run", "--no-default-browser-check", "--disable-background-networking",
-            "--", url,
-        ], timeout=15, capture_output=True, text=True)
-        if launch.returncode:
-            raise RuntimeError(launch.stderr.strip() or "Browser launch failed")
-        token, actual = reports.get(timeout=40)
-        assert (token, actual) == (str(index), expected), (token, actual, expected)
-        print(f"PASS {index + 1}: {directory} opened in {actual}", flush=True)
-    print("PASS: cold launch and warm forwarding preserve both profile stores", flush=True)
+    subprocess.run(["swift", "build", "--build-tests"], check=True)
+    products = pathlib.Path(subprocess.check_output(["swift", "build", "--show-bin-path"], text=True).strip())
+    platform = pathlib.Path(subprocess.check_output(["xcrun", "--show-sdk-platform-path"], text=True).strip())
+    frameworks = platform / "Developer/Library/Frameworks"
+    host = root / "Switcheroo Focus Tests.app"
+    executable = host / "Contents/MacOS/FocusTestHost"
+    executable.parent.mkdir(parents=True)
+    test_bundle = host / "Contents/PlugIns/SwitcherooAppTests.xctest"
+    source_bundle = next(path for name in ["SwitcherooAppTests.xctest", "SwitcherooPackageTests.xctest"]
+                         if (path := products / name).exists())
+    shutil.copytree(source_bundle, test_bundle)
+    with (host / "Contents/Info.plist").open("wb") as info:
+        plistlib.dump({"CFBundleIdentifier": "local.switcheroo.focus-tests.host", "CFBundleExecutable": "FocusTestHost",
+                      "CFBundleName": "Switcheroo Focus Tests", "CFBundlePackageType": "APPL", "LSUIElement": True}, info)
+    subprocess.run(["swiftc", "-parse-as-library", "scripts/focus-test-host.swift", "-F", str(frameworks),
+                    "-Xlinker", "-rpath", "-Xlinker", str(frameworks),
+                    "-Xlinker", "-rpath", "-Xlinker", str(platform / "Developer/usr/lib"),
+                    "-o", str(executable)], check=True)
+    # A separate app path prevents activation checks from matching a personal browser process.
+    subprocess.run(["/bin/cp", "-cR", args.browser, str(browser)], check=True)
+    for directory in ["Default", "Profile 1"]:
+        (data / directory).mkdir(parents=True)
+    (data / "First Run").touch()
+    test_environment = dict(os.environ)
+    test_environment.update({
+        "SWITCHEROO_ROUTING_SMOKE_URL": f"http://127.0.0.1:{server.server_port}/check",
+        "SWITCHEROO_ROUTING_SMOKE_APP": str(browser),
+        "SWITCHEROO_ROUTING_SMOKE_ROOT": str(data),
+        "SWITCHEROO_ROUTING_SMOKE_REPORTS": str(reports),
+        "SWITCHEROO_FOCUS_TEST_BUNDLE": str(test_bundle),
+        "SWITCHEROO_FOCUS_RESULT": str(root / "result"),
+    })
+    stdout = root / "stdout.log"
+    stderr = root / "stderr.log"
+    try:
+        subprocess.run(["/usr/bin/open", "-n", "-W", "-a", str(host), "--stdout", str(stdout), "--stderr", str(stderr),
+                        "--args", "--filter", "chromiumPickerAndRuleFocus"],
+                       env=test_environment, check=True, timeout=240)
+    finally:
+        for output in [stdout, stderr]:
+            if output.exists():
+                print(output.read_text(), end="", flush=True)
+    assert (root / "result").read_text() == "0", "Native focus test failed"
+    for index, expected in enumerate(["personal", "work", "personal", "work"]):
+        report = json.loads((reports / f"{index}.json").read_text())
+        assert report == {"token": str(index), "profile": expected, "focused": True}, report
+    print("PASS: cold, warm, hidden, and saved-rule launches select the right profile and foreground browser", flush=True)
 finally:
-    # Only terminate processes carrying this run's unique, disposable data directory.
+    # Only terminate browser and host processes belonging to this run.
+    cleanup_complete = True
     try:
         processes = subprocess.check_output(["ps", "-axo", "pid=,command="], text=True)
         pids = [int(line.strip().split(None, 1)[0]) for line in processes.splitlines()
-                if f"--user-data-dir={root}" in line]
+                if f"--user-data-dir={data}" in line
+                or str(root / "Switcheroo Focus Tests.app/Contents/MacOS/FocusTestHost") in line]
         for pid in pids:
             subprocess.run(["kill", "-TERM", str(pid)], capture_output=True)
         deadline = time.monotonic() + 5
@@ -97,7 +138,16 @@ finally:
             pids = remaining
             if pids:
                 time.sleep(0.1)
+        cleanup_complete = not pids
     except (PermissionError, subprocess.CalledProcessError):
+        cleanup_complete = False
         print("Process inspection was denied; cleanup could not verify browser termination.", flush=True)
     server.shutdown()
-    shutil.rmtree(root, ignore_errors=True)
+    if cleanup_complete:
+        lsregister = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+        for bundle in [browser, root / "Switcheroo Focus Tests.app"]:
+            if bundle.exists():
+                subprocess.run([lsregister, "-u", str(bundle)], capture_output=True)
+        shutil.rmtree(root, ignore_errors=True)
+    else:
+        print(f"Test processes are still running; fixtures preserved at {root}", flush=True)

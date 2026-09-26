@@ -83,7 +83,7 @@ swift test            # logic and settings tests
 ./scripts/build.sh    # builds dist/Switcheroo.app without installing
 ```
 
-Run `swift test` with `SWITCHEROO_CAPTURE_DIR` set to also run the UI tests. They open real windows and save screenshots to that folder. The `scripts/smoke-*.py` scripts check real browser launches using throwaway profiles, and `scripts/check-runtime.py` measures idle CPU and memory for a release build.
+Run `swift test` with `SWITCHEROO_CAPTURE_DIR` set to also run the UI tests. They open real windows and save screenshots to that folder. `scripts/smoke-routing.py` runs native picker and saved-rule checks using a disposable browser copy and profiles, verifying both routing and foreground focus. Pass `--browser "/Applications/Google Chrome.app"` to check Chrome instead of Brave. `scripts/smoke-safari.py` opens one local test tab in Safari and verifies foreground focus. These checks switch the active app, so let them finish before using other windows. `scripts/check-runtime.py` measures idle CPU and memory for a release build.
 
 ## License
 

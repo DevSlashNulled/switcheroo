@@ -25,7 +25,18 @@ enum BrowserLauncher {
             guard let arguments = target.launchArguments(for: url) else {
                 throw LaunchFailure(message: "The profile’s browser data folder is unavailable.")
             }
+            // Chromium forwards a new instance's arguments to the existing process.
+            // Keep that process so activation cannot target the short-lived forwarder.
+            let running = NSRunningApplication.runningApplications(
+                withBundleIdentifier: target.installation.family.bundleIdentifier
+            ).first { !$0.isTerminated && $0.bundleURL?.resolvingSymlinksInPath() == app.resolvingSymlinksInPath() }
+            if let running {
+                NSApp.yieldActivation(to: running)
+            } else {
+                NSApp.yieldActivation(toApplicationWithBundleIdentifier: target.installation.family.bundleIdentifier)
+            }
             try await runOpen(arguments, name: target.name)
+            running?.activate(from: .current, options: [])
         } else {
             let configuration = NSWorkspace.OpenConfiguration()
             configuration.activates = true

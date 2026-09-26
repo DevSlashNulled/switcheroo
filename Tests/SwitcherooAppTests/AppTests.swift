@@ -380,6 +380,12 @@ struct AppTests {
         let installation = BrowserInstallation(family: .safari, applicationURL: appURL)
         let url = try #require(URL(string: ProcessInfo.processInfo.environment["SWITCHEROO_SAFARI_SMOKE_URL"]!))
         try await BrowserLauncher.open(BrowserTarget(installation: installation, name: "Safari"), url: url)
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while NSWorkspace.shared.frontmostApplication?.bundleIdentifier != BrowserFamily.safari.bundleIdentifier,
+              ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        #expect(NSWorkspace.shared.frontmostApplication?.bundleIdentifier == BrowserFamily.safari.bundleIdentifier)
     }
 
     private func capture(_ window: NSWindow, name: String, appearance: NSAppearance.Name, directory: URL) async throws {

@@ -155,16 +155,27 @@ struct RouterTests {
         router.updateTargets([personal, work])
         let first = URL(string: "https://one.example/path?token=123#frag")!
         router.enqueue([first, URL(string: "https://two.example")!])
+        #expect(router.isPresented)
+        var presentedAtStateChange: Bool?
+        router.stateDidChange = { [weak router] in presentedAtStateChange = router?.isPresented }
         router.choose(personal.id, remember: true)
+        #expect(presentedAtStateChange == false)
+        #expect(!router.isPresented)
+        #expect(probe.calls.isEmpty)
         router.choose(work.id, remember: true)
         router.cancel()
-        router.enqueue([URL(string: "https://three.example")!])
         await settle { probe.continuation != nil }
+        #expect(!router.isPresented)
+        router.updateTargets([personal, work])
+        #expect(!router.isPresented)
+        router.enqueue([URL(string: "https://three.example")!])
+        #expect(!router.isPresented)
         #expect(router.pending.count == 3)
         #expect(probe.calls.count == 1)
         #expect(probe.calls.first?.1 == first)
         probe.continuation?.resume()
         await settle { !router.isLaunching }
+        #expect(router.isPresented)
         #expect(router.current?.host == "two.example")
         #expect(router.pending.count == 2)
         #expect(remembered == [WebsiteRule(host: "one.example", targetID: personal.id)])
@@ -174,15 +185,21 @@ struct RouterTests {
         let probe = LaunchProbe()
         probe.failure = true
         let router = LinkRouter(launch: probe.open)
+        var remembered: [WebsiteRule] = []
+        router.didRemember = { remembered.append($0) }
         router.updateTargets([personal])
-        router.enqueue([URL(string: "https://example.com")!])
+        let url = URL(string: "https://example.com/path?query=123#fragment")!
+        router.enqueue([url])
         let requestID = router.current?.id
         router.choose(personal.id, remember: true)
+        #expect(!router.isPresented)
         await settle { !router.isLaunching }
         #expect(router.current?.id == requestID)
+        #expect(router.current?.url == url)
         #expect(router.isPresented)
         #expect(router.message != nil)
         #expect(router.rules.isEmpty)
+        #expect(remembered.isEmpty)
         router.updateTargets([personal])
         #expect(probe.calls.count == 1)
         probe.failure = false

@@ -33,6 +33,6 @@ try:
                    env=test_environment, check=True, timeout=60)
     user_agent = requests.get(timeout=30)
     assert "Safari/" in user_agent and "Chrome/" not in user_agent, "Unexpected browser received the link"
-    print("PASS: Safari fetched the local test page through BrowserLauncher", flush=True)
+    print("PASS: Safari fetched the local test page through BrowserLauncher and became frontmost", flush=True)
 finally:
     server.shutdown()

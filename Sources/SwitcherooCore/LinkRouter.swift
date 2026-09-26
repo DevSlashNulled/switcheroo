@@ -67,6 +67,8 @@ public final class LinkRouter {
 
     private func startLaunch(_ target: BrowserTarget, link: PendingLink, remember: Bool) {
         isLaunching = true
+        // Hide before handing off focus; discovery can refresh the picker during the launch.
+        isPresented = false
         message = nil
         stateDidChange?()
         Task {
